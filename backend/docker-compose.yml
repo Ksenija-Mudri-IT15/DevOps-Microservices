@@ -1,0 +1,188 @@
+version: '3.8'
+
+services:
+  # -------------------------
+  # API GATEWAY
+  # -------------------------
+  apigateway:
+    image: apigateway
+    build:
+      context: ./ApiGateway
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    networks:
+      - microservices-net
+    depends_on:
+      requestservice:
+        condition: service_started
+      employeeservice:
+        condition: service_started
+      departmentservice:
+        condition: service_started
+      leavebalanceservice:
+        condition: service_started
+      notificationservice:
+        condition: service_started
+      absenceservice:
+        condition: service_started
+
+  # -------------------------
+  # MICROSERVICES
+  # -------------------------
+  requestservice:
+    image: requestservice
+    build:
+      context: ./RequestService
+      dockerfile: Dockerfile
+    networks:
+      - microservices-net
+    depends_on:
+      request-db:
+        condition: service_healthy
+
+  employeeservice:
+    image: employeeservice
+    build:
+      context: ./EmployeeService
+      dockerfile: Dockerfile
+    networks:
+      - microservices-net
+    depends_on:
+      employee-db:
+        condition: service_healthy
+
+  departmentservice:
+    image: departmentservice
+    build:
+      context: ./DepartmentService
+      dockerfile: DepartmentService.API/Dockerfile
+    networks:
+      - microservices-net
+    depends_on:
+      department-db:
+        condition: service_healthy
+
+  leavebalanceservice:
+    image: leavebalanceservice
+    build:
+      context: ./LeaveBalanceService
+      dockerfile: Dockerfile
+    networks:
+      - microservices-net
+    depends_on:
+      leavebalance-db:
+        condition: service_healthy
+
+  notificationservice:
+    image: notificationservice
+    build:
+      context: ./NotificationService
+      dockerfile: Dockerfile
+    networks:
+      - microservices-net
+    depends_on:
+      notification-db:
+        condition: service_healthy
+
+  absenceservice:
+    image: absenceservice
+    build:
+      context: ./AbsenceService
+      dockerfile: Dockerfile
+    networks:
+      - microservices-net
+    depends_on:
+      absence-db:
+        condition: service_healthy
+
+  # -------------------------
+  # POSTGRES DATABASES
+  # -------------------------
+  request-db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_DB: RequestDb
+    networks:
+      - microservices-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d RequestDb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  employee-db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_DB: EmployeeDb
+    networks:
+      - microservices-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d EmployeeDb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  department-db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_DB: DepartmentDb
+    networks:
+      - microservices-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d DepartmentDb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  leavebalance-db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_DB: LeaveBalanceDb
+    networks:
+      - microservices-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d LeaveBalanceDb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  notification-db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_DB: NotificationDb
+    networks:
+      - microservices-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d NotificationDb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  absence-db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_DB: AbsenceDb
+    networks:
+      - microservices-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d AbsenceDb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+networks:
+  microservices-net:
+    driver: bridge
