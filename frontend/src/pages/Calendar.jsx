@@ -81,7 +81,7 @@ const CalendarPage = () => {
     return 'event-education';
   };
 
-  const getEventIcon = (type, leaveType) => {
+  const getEventIcon = (type) => {
     if (type === 1 || type === 'Leave') {
       return <Clock size={12} />;
     }

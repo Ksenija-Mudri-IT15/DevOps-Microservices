@@ -90,11 +90,6 @@ const Requests = () => {
     return emp ? `${emp.firstName} ${emp.lastName}` : `Employee #${empId}`;
   };
 
-  const getEmployeeRole = (empId) => {
-    const emp = employees.find(e => e.id === empId);
-    return emp ? emp.role : 'Employee';
-  };
-
   const handleCreate = async (e) => {
     e.preventDefault();
     setError('');
