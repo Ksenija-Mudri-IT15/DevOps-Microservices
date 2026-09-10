@@ -1,3 +1,4 @@
+using MassTransit;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -22,6 +23,16 @@ public static class DependencyInjection
                 b => b.MigrationsAssembly(typeof(RequestDbContext).Assembly.FullName)));
 
         services.AddScoped<IRequestRepository, RequestRepository>();
+
+        // RequestService only publishes events (LeaveRequestCreated, LeaveRequestStatusChanged) - it has no consumers.
+        var rabbitMqHost = configuration["RabbitMq:Host"] ?? "rabbitmq";
+        services.AddMassTransit(x =>
+        {
+            x.UsingRabbitMq((context, cfg) =>
+            {
+                cfg.Host(rabbitMqHost);
+            });
+        });
 
         return services;
     }

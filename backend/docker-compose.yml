@@ -40,6 +40,8 @@ services:
     depends_on:
       request-db:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
 
   employeeservice:
     image: employeeservice
@@ -84,6 +86,8 @@ services:
     depends_on:
       notification-db:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
 
   absenceservice:
     image: absenceservice
@@ -95,6 +99,25 @@ services:
     depends_on:
       absence-db:
         condition: service_healthy
+
+  # -------------------------
+  # MESSAGE QUEUE
+  # -------------------------
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    ports:
+      - "5672:5672"   # AMQP
+      - "15672:15672" # Management UI (guest/guest)
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+      - ./rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+    networks:
+      - microservices-net
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # -------------------------
   # POSTGRES DATABASES
@@ -186,3 +209,6 @@ services:
 networks:
   microservices-net:
     driver: bridge
+
+volumes:
+  rabbitmq_data:

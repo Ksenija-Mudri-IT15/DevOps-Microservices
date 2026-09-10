@@ -1,11 +1,13 @@
 using FluentValidation;
 using FluentValidation.AspNetCore;
+using MassTransit;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using NotificationService.API.Middlewares;
+using NotificationService.Application.Consumers;
 using NotificationService.Application.Interfaces;
 using NotificationService.Application.Services;
 using NotificationService.Application.Validators;
@@ -40,6 +42,20 @@ builder.Services.AddScoped<INotificationService, NotificationAppService>();
 // Application Layer: Validation
 builder.Services.AddValidatorsFromAssemblyContaining<CreateNotificationRequestValidator>();
 builder.Services.AddFluentValidationAutoValidation(); // Automatic validation before controller action
+
+// Asynchronous inter-service communication (RabbitMQ): reacts to events published by RequestService
+var rabbitMqHost = builder.Configuration["RabbitMq:Host"] ?? "rabbitmq";
+builder.Services.AddMassTransit(x =>
+{
+    x.AddConsumer<LeaveRequestCreatedConsumer>();
+    x.AddConsumer<LeaveRequestStatusChangedConsumer>();
+
+    x.UsingRabbitMq((context, cfg) =>
+    {
+        cfg.Host(rabbitMqHost);
+        cfg.ConfigureEndpoints(context);
+    });
+});
 
 builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
