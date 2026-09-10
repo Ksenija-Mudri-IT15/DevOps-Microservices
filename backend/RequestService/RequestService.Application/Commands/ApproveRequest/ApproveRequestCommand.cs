@@ -1,3 +1,5 @@
+using Contracts.Events;
+using MassTransit;
 using MediatR;
 using RequestService.Domain.Interfaces;
 
@@ -8,10 +10,12 @@ public record ApproveRequestCommand(int RequestId, string ApproverRole, bool App
 public class ApproveRequestHandler : IRequestHandler<ApproveRequestCommand, bool>
 {
     private readonly IRequestRepository _requestRepository;
+    private readonly IPublishEndpoint _publishEndpoint;
 
-    public ApproveRequestHandler(IRequestRepository requestRepository)
+    public ApproveRequestHandler(IRequestRepository requestRepository, IPublishEndpoint publishEndpoint)
     {
         _requestRepository = requestRepository;
+        _publishEndpoint = publishEndpoint;
     }
 
     public async Task<bool> Handle(ApproveRequestCommand request, CancellationToken cancellationToken)
@@ -42,6 +46,12 @@ public class ApproveRequestHandler : IRequestHandler<ApproveRequestCommand, bool
 
         _requestRepository.Update(entity);
         await _requestRepository.UnitOfWork.SaveChangesAsync(cancellationToken);
+
+        await _publishEndpoint.Publish(new LeaveRequestStatusChanged(
+            entity.Id,
+            entity.EmployeeId,
+            entity.Status.Name,
+            request.Approve ? request.ApproverRole : null), cancellationToken);
 
         return true;
     }

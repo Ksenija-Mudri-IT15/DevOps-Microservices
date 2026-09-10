@@ -1,3 +1,5 @@
+using Contracts.Events;
+using MassTransit;
 using MediatR;
 using RequestService.Application.DTOs;
 using RequestService.Domain.Entities;
@@ -31,13 +33,16 @@ public class CreateLeaveRequestHandler : IRequestHandler<CreateLeaveRequestComma
 {
     private readonly IRequestRepository _requestRepository;
     private readonly RequestService.Application.Services.IEmployeeServiceClient _employeeServiceClient;
+    private readonly IPublishEndpoint _publishEndpoint;
 
     public CreateLeaveRequestHandler(
-        IRequestRepository requestRepository, 
-        RequestService.Application.Services.IEmployeeServiceClient employeeServiceClient)
+        IRequestRepository requestRepository,
+        RequestService.Application.Services.IEmployeeServiceClient employeeServiceClient,
+        IPublishEndpoint publishEndpoint)
     {
         _requestRepository = requestRepository;
         _employeeServiceClient = employeeServiceClient;
+        _publishEndpoint = publishEndpoint;
     }
 
     public async Task<int> Handle(CreateLeaveRequestCommand request, CancellationToken cancellationToken)
@@ -119,6 +124,15 @@ public class CreateLeaveRequestHandler : IRequestHandler<CreateLeaveRequestComma
 
         await _requestRepository.AddAsync(entity, cancellationToken);
         await _requestRepository.UnitOfWork.SaveChangesAsync(cancellationToken);
+
+        // 4. Asynchronous inter-service communication (RabbitMQ) - NotificationService reacts to this
+        await _publishEndpoint.Publish(new LeaveRequestCreated(
+            entity.Id,
+            entity.EmployeeId,
+            request.Type.ToString(),
+            entity.StartDate,
+            entity.EndDate,
+            entity.Description), cancellationToken);
 
         return entity.Id;
     }
