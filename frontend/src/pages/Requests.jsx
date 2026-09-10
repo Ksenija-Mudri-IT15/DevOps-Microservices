@@ -307,7 +307,7 @@ const Requests = () => {
                     <td>
                       <div className="action-buttons text-right">
                         {((user.role === 'Manager' && req.status === 'Pending' && req.employeeId !== user.id) || 
-                           (user.role === 'Admin' && (req.status === 'PendingAdminApproval' || (req.status === 'Pending' && getEmployeeRole(req.employeeId) === 'Manager')))) && (
+                           (user.role === 'Admin' && req.employeeId !== user.id && (req.status === 'Pending' || req.status === 'PendingAdminApproval'))) && (
                           <>
                             <button className="btn-approve btn-icon-only mr-sm" onClick={() => handleApprove(req.id)}>
                               <Check size={16} />
