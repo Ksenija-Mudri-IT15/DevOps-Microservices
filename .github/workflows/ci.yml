@@ -1,0 +1,172 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [main]
+
+env:
+  DOTNET_VERSION: "8.0.x"
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  backend:
+    name: backend / ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: ApiGateway
+            dir: ApiGateway
+            sln: ""
+            api: ApiGateway.csproj
+            testFilter: ""
+          - name: AbsenceService
+            dir: AbsenceService
+            sln: Absence.sln
+            api: src/Absence.Api/Absence.Api.csproj
+            testFilter: "FullyQualifiedName!~Integration"
+          - name: DepartmentService
+            dir: DepartmentService
+            sln: DepartmentService.sln
+            api: DepartmentService.API/DepartmentService.API.csproj
+            # DepartmentsControllerTests hits a real DB through WebApplicationFactory but
+            # isn't in a separately-named Integration project like the other services, so
+            # it needs its own exclusion here too.
+            testFilter: "FullyQualifiedName!~Integration&FullyQualifiedName!~DepartmentsControllerTests"
+          - name: EmployeeService
+            dir: EmployeeService
+            sln: EmployeeManagement.sln
+            api: src/EmployeeManagement.API/EmployeeManagement.API.csproj
+            testFilter: "FullyQualifiedName!~Integration"
+          - name: LeaveBalanceService
+            dir: LeaveBalanceService
+            sln: LeaveBalanceService.sln
+            api: src/LeaveBalanceService.API/LeaveBalanceService.API.csproj
+            testFilter: "FullyQualifiedName!~Integration"
+          - name: NotificationService
+            dir: NotificationService
+            sln: NotificationService.sln
+            api: NotificationService.API/NotificationService.API.csproj
+            testFilter: "FullyQualifiedName!~Integration"
+          - name: RequestService
+            dir: RequestService
+            sln: RequestService.sln
+            api: RequestService.API/RequestService.API.csproj
+            testFilter: "FullyQualifiedName!~Integration"
+    defaults:
+      run:
+        working-directory: backend/${{ matrix.dir }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        run: dotnet restore "${{ matrix.sln != '' && matrix.sln || matrix.api }}"
+
+      - name: Build
+        run: dotnet build "${{ matrix.sln != '' && matrix.sln || matrix.api }}" --no-restore --configuration Release
+
+      # Only unit tests run here - integration test projects (name contains "Integration")
+      # need a live Postgres/RabbitMQ and are exercised via docker-compose instead, not on
+      # every push. This still builds them above, so a compile break is caught either way.
+      - name: Test
+        if: matrix.sln != ''
+        run: >
+          dotnet test "${{ matrix.sln }}" --no-build --configuration Release
+          --filter "${{ matrix.testFilter }}"
+          --logger "trx;LogFileName=test-results.trx"
+          --results-directory ./TestResults
+
+      - name: Upload test results
+        if: always() && matrix.sln != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.name }}
+          path: backend/${{ matrix.dir }}/TestResults/*.trx
+          if-no-files-found: ignore
+
+      - name: Publish build artifact
+        run: dotnet publish "${{ matrix.api }}" --no-restore --configuration Release --output ./publish
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ matrix.name }}
+          path: backend/${{ matrix.dir }}/publish
+          retention-days: 7
+
+  docker-build:
+    name: docker / ${{ matrix.name }}
+    needs: backend
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: apigateway
+            context: backend/ApiGateway
+            dockerfile: backend/ApiGateway/Dockerfile
+          - name: absenceservice
+            context: backend/AbsenceService
+            dockerfile: backend/AbsenceService/Dockerfile
+          - name: departmentservice
+            context: backend/DepartmentService
+            dockerfile: backend/DepartmentService/DepartmentService.API/Dockerfile
+          - name: employeeservice
+            context: backend/EmployeeService
+            dockerfile: backend/EmployeeService/Dockerfile
+          - name: leavebalanceservice
+            context: backend/LeaveBalanceService
+            dockerfile: backend/LeaveBalanceService/Dockerfile
+          - name: notificationservice
+            context: backend/NotificationService
+            dockerfile: backend/NotificationService/Dockerfile
+          - name: requestservice
+            context: backend/RequestService
+            dockerfile: backend/RequestService/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      # Build only - pushing to a registry is optional per the assignment spec and needs
+      # registry credentials this repo doesn't have configured.
+      - name: Build image
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: false
+          tags: ${{ matrix.name }}:${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build-frontend
+          path: frontend/dist
+          retention-days: 7
