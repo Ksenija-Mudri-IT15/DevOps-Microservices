@@ -26,7 +26,7 @@ const Login = () => {
       if (!result.success) {
         setError(result.message || 'Invalid credentials');
       }
-    } catch (err) {
+    } catch {
       setError('An error occurred during login. Is the backend running?');
     } finally {
       setIsLoading(false);

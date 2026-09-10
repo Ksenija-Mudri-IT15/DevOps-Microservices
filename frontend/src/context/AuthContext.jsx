@@ -66,4 +66,5 @@ export const AuthProvider = ({ children }) => {
   return <AuthContext.Provider value={value}>{!loading && children}</AuthContext.Provider>;
 };
 
+// eslint-disable-next-line react-refresh/only-export-components -- context + hook is the standard pairing for this file
 export const useAuth = () => useContext(AuthContext);

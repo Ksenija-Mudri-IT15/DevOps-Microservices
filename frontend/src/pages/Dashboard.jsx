@@ -52,7 +52,7 @@ const Dashboard = () => {
 
       if (user.role === 'Admin') {
         // Fetch Admin data
-        const [empRes, reqRes, deptRes, balanceRes] = await Promise.all([
+        const [empRes, reqRes, , balanceRes] = await Promise.all([
           api.get('/employees'),
           api.get('/requests'),
           api.get('/departments'),
