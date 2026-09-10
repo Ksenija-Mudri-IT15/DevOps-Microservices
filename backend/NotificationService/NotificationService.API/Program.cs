@@ -6,12 +6,15 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using NotificationService.API.Hubs;
 using NotificationService.API.Middlewares;
+using NotificationService.API.Realtime;
 using NotificationService.Application.Consumers;
 using NotificationService.Application.Interfaces;
 using NotificationService.Application.Services;
 using NotificationService.Application.Validators;
 using NotificationService.Infrastructure.Persistence;
+using NotificationService.Infrastructure.Realtime;
 using NotificationService.Infrastructure.Repositories;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -57,6 +60,23 @@ builder.Services.AddMassTransit(x =>
     });
 });
 
+// Reactive communication (System.Reactive + SignalR): every notification created
+// (via REST or a RabbitMQ consumer) is pushed to connected clients in real time.
+builder.Services.AddSingleton<INotificationEventPublisher, RxNotificationEventPublisher>();
+builder.Services.AddHostedService<NotificationBroadcastService>();
+builder.Services.AddSignalR();
+
+// Local dev only: lets the frontend (a different origin) connect to the SignalR hub
+// with credentials so it can be grouped by connection.
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("NotificationHub", policy => policy
+        .SetIsOriginAllowed(_ => true)
+        .AllowAnyHeader()
+        .AllowAnyMethod()
+        .AllowCredentials());
+});
+
 builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
@@ -85,9 +105,12 @@ app.UseMiddleware<GlobalExceptionHandler>();
 
 app.UseHttpsRedirection();
 
+app.UseCors("NotificationHub");
+
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHub<NotificationHub>("/hubs/notifications");
 
 app.Run();
 
