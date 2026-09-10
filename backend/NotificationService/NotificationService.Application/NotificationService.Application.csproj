@@ -6,7 +6,7 @@
 
   <ItemGroup>
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="12.1.1" />
-    <PackageReference Include="MassTransit" Version="9.2.1" />
+    <PackageReference Include="MassTransit" Version="8.5.10" />
   </ItemGroup>
 
   <PropertyGroup>
