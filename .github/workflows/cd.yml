@@ -1,0 +1,51 @@
+name: CD
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy locally
+    # Runs on a self-hosted runner registered on the machine that actually hosts the local
+    # docker-compose stack - GitHub's own hosted runners can't reach this machine's Docker
+    # daemon or localhost, so a fully local deploy has to run on hardware you control.
+    runs-on: [self-hosted, local-deploy]
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build changed images
+        run: docker compose build
+
+      - name: Deploy (recreate containers whose image changed)
+        run: docker compose up -d
+
+      - name: Wait for every service to report healthy
+        shell: bash
+        run: |
+          set -e
+          services="apigateway requestservice employeeservice departmentservice leavebalanceservice notificationservice absenceservice"
+          for s in $services; do
+            echo "Waiting on $s..."
+            for i in $(seq 1 30); do
+              status=$(docker inspect --format='{{.State.Health.Status}}' "backend-${s}-1" 2>/dev/null || echo "starting")
+              if [ "$status" = "healthy" ]; then
+                echo "$s is healthy"
+                break
+              fi
+              if [ "$i" = "30" ]; then
+                echo "::error::$s did not become healthy within 150s"
+                docker compose logs "$s" --tail 50
+                exit 1
+              fi
+              sleep 5
+            done
+          done
+
+      - name: Post-deploy check
+        shell: bash
+        run: curl -f http://localhost:8080/health
