@@ -1,0 +1,17 @@
+<Project>
+
+  <!--
+    Applies to every .csproj under backend/ (MSBuild walks up from each project looking for
+    this file) - static analysis without any external account/token. .NET analyzers are on
+    by default at "Minimum" mode; this raises it to "Recommended" so more real findings
+    (code smells, likely bugs) actually surface instead of just the build-breaking ones.
+    Warnings only, not errors - the existing codebase isn't clean enough yet to gate on this.
+  -->
+  <PropertyGroup>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <AnalysisMode>Recommended</AnalysisMode>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+  </PropertyGroup>
+
+</Project>
