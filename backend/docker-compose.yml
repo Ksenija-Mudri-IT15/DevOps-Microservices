@@ -15,17 +15,23 @@ services:
       - microservices-net
     depends_on:
       requestservice:
-        condition: service_started
+        condition: service_healthy
       employeeservice:
-        condition: service_started
+        condition: service_healthy
       departmentservice:
-        condition: service_started
+        condition: service_healthy
       leavebalanceservice:
-        condition: service_started
+        condition: service_healthy
       notificationservice:
-        condition: service_started
+        condition: service_healthy
       absenceservice:
-        condition: service_started
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
   # -------------------------
   # MICROSERVICES
@@ -42,6 +48,12 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
   employeeservice:
     image: employeeservice
@@ -53,6 +65,12 @@ services:
     depends_on:
       employee-db:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
   departmentservice:
     image: departmentservice
@@ -64,6 +82,12 @@ services:
     depends_on:
       department-db:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
   leavebalanceservice:
     image: leavebalanceservice
@@ -75,6 +99,12 @@ services:
     depends_on:
       leavebalance-db:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
   notificationservice:
     image: notificationservice
@@ -88,6 +118,12 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
   absenceservice:
     image: absenceservice
@@ -99,6 +135,12 @@ services:
     depends_on:
       absence-db:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
   # -------------------------
   # MESSAGE QUEUE
@@ -118,6 +160,59 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  # -------------------------
+  # OBSERVABILITY: metrics (Prometheus + Grafana), traces (Jaeger), logs (Seq)
+  # -------------------------
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090" # Prometheus UI / PromQL
+    networks:
+      - microservices-net
+
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3001:3000" # Dashboards (admin/admin, or open anonymously) - host 3000 is taken by a local Grafana service
+    networks:
+      - microservices-net
+    depends_on:
+      - prometheus
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686" # Jaeger UI
+      - "4317:4317"   # OTLP gRPC receiver (traces)
+      - "4318:4318"   # OTLP HTTP receiver (traces)
+    networks:
+      - microservices-net
+
+  seq:
+    image: datalust/seq:latest
+    environment:
+      ACCEPT_EULA: "Y"
+      SEQ_FIRSTRUN_NOAUTHENTICATION: "true"
+    volumes:
+      - seq_data:/data
+    ports:
+      - "5341:80" # Seq UI / log search
+    networks:
+      - microservices-net
 
   # -------------------------
   # POSTGRES DATABASES
@@ -212,3 +307,6 @@ networks:
 
 volumes:
   rabbitmq_data:
+  prometheus_data:
+  grafana_data:
+  seq_data:

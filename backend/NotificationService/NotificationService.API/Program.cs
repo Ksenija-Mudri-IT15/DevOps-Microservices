@@ -16,8 +16,42 @@ using NotificationService.Application.Validators;
 using NotificationService.Infrastructure.Persistence;
 using NotificationService.Infrastructure.Realtime;
 using NotificationService.Infrastructure.Repositories;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
+using Serilog;
+using Serilog.Enrichers.Span;
+
+const string ServiceName = "notificationservice";
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Logs: structured Serilog output, enriched with TraceId/SpanId for correlation with traces (Jaeger).
+builder.Host.UseSerilog((context, services, configuration) => configuration
+    .ReadFrom.Configuration(context.Configuration)
+    .Enrich.FromLogContext()
+    .Enrich.WithSpan()
+    .Enrich.WithProperty("Service", ServiceName)
+    .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj} {Properties:j}{NewLine}{Exception}")
+    .WriteTo.Seq(context.Configuration["Seq:ServerUrl"] ?? "http://seq"));
+
+// Traces + metrics: OpenTelemetry. Traces to Jaeger over OTLP, metrics scraped by Prometheus from
+// /metrics. AddSource("MassTransit") picks up the RabbitMQ publish/consume spans MassTransit
+// already emits internally, so a trace started in RequestService continues through the queue.
+builder.Services.AddOpenTelemetry()
+    .ConfigureResource(r => r.AddService(ServiceName))
+    .WithTracing(tracing => tracing
+        .AddSource("MassTransit")
+        .AddAspNetCoreInstrumentation()
+        .AddHttpClientInstrumentation()
+        .AddEntityFrameworkCoreInstrumentation()
+        .AddOtlpExporter(o => o.Endpoint = new Uri(builder.Configuration["Otlp:Endpoint"] ?? "http://jaeger:4317")))
+    .WithMetrics(metrics => metrics
+        .AddAspNetCoreInstrumentation()
+        .AddHttpClientInstrumentation()
+        .AddPrometheusExporter());
+
+builder.Services.AddHealthChecks();
 
 // Add services to the container.
 
@@ -111,6 +145,8 @@ app.UseAuthorization();
 
 app.MapControllers();
 app.MapHub<NotificationHub>("/hubs/notifications");
+app.MapHealthChecks("/health");
+app.MapPrometheusScrapingEndpoint(); // GET /metrics
 
 app.Run();
 
