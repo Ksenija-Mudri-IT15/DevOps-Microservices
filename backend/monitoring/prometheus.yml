@@ -1,0 +1,32 @@
+global:
+  scrape_interval: 10s
+  evaluation_interval: 10s
+
+scrape_configs:
+  - job_name: apigateway
+    static_configs:
+      - targets: ["apigateway:8080"]
+
+  - job_name: requestservice
+    static_configs:
+      - targets: ["requestservice:8080"]
+
+  - job_name: employeeservice
+    static_configs:
+      - targets: ["employeeservice:8080"]
+
+  - job_name: departmentservice
+    static_configs:
+      - targets: ["departmentservice:8080"]
+
+  - job_name: leavebalanceservice
+    static_configs:
+      - targets: ["leavebalanceservice:8080"]
+
+  - job_name: notificationservice
+    static_configs:
+      - targets: ["notificationservice:8080"]
+
+  - job_name: absenceservice
+    static_configs:
+      - targets: ["absenceservice:8080"]

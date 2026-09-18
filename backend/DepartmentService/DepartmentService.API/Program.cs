@@ -7,8 +7,39 @@ using DepartmentService.Infrastructure.Repositories;
 using FluentValidation;
 using FluentValidation.AspNetCore;
 using Microsoft.EntityFrameworkCore;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
+using Serilog;
+using Serilog.Enrichers.Span;
+
+const string ServiceName = "departmentservice";
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Logs: structured Serilog output, enriched with TraceId/SpanId for correlation with traces (Jaeger).
+builder.Host.UseSerilog((context, services, configuration) => configuration
+    .ReadFrom.Configuration(context.Configuration)
+    .Enrich.FromLogContext()
+    .Enrich.WithSpan()
+    .Enrich.WithProperty("Service", ServiceName)
+    .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj} {Properties:j}{NewLine}{Exception}")
+    .WriteTo.Seq(context.Configuration["Seq:ServerUrl"] ?? "http://seq"));
+
+// Traces + metrics: OpenTelemetry. Traces to Jaeger over OTLP, metrics scraped by Prometheus from /metrics.
+builder.Services.AddOpenTelemetry()
+    .ConfigureResource(r => r.AddService(ServiceName))
+    .WithTracing(tracing => tracing
+        .AddAspNetCoreInstrumentation()
+        .AddHttpClientInstrumentation()
+        .AddEntityFrameworkCoreInstrumentation()
+        .AddOtlpExporter(o => o.Endpoint = new Uri(builder.Configuration["Otlp:Endpoint"] ?? "http://jaeger:4317")))
+    .WithMetrics(metrics => metrics
+        .AddAspNetCoreInstrumentation()
+        .AddHttpClientInstrumentation()
+        .AddPrometheusExporter());
+
+builder.Services.AddHealthChecks();
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
@@ -52,6 +83,8 @@ using (var scope = app.Services.CreateScope())
 
 app.UseAuthorization();
 app.MapControllers();
+app.MapHealthChecks("/health");
+app.MapPrometheusScrapingEndpoint(); // GET /metrics
 app.Run();
 
 public partial class Program { }

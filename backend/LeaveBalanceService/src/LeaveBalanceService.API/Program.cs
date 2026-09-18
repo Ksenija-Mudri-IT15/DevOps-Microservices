@@ -7,9 +7,40 @@ using LeaveBalanceService.Domain.Repositories;
 using LeaveBalanceService.Infrastructure.Data;
 using LeaveBalanceService.Infrastructure.Repositories;
 using Microsoft.EntityFrameworkCore;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
+using Serilog;
+using Serilog.Enrichers.Span;
 using SharpGrip.FluentValidation.AutoValidation.Mvc.Extensions;
 
+const string ServiceName = "leavebalanceservice";
+
 var builder = WebApplication.CreateBuilder(args);
+
+// Logs: structured Serilog output, enriched with TraceId/SpanId for correlation with traces (Jaeger).
+builder.Host.UseSerilog((context, services, configuration) => configuration
+    .ReadFrom.Configuration(context.Configuration)
+    .Enrich.FromLogContext()
+    .Enrich.WithSpan()
+    .Enrich.WithProperty("Service", ServiceName)
+    .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj} {Properties:j}{NewLine}{Exception}")
+    .WriteTo.Seq(context.Configuration["Seq:ServerUrl"] ?? "http://seq"));
+
+// Traces + metrics: OpenTelemetry. Traces to Jaeger over OTLP, metrics scraped by Prometheus from /metrics.
+builder.Services.AddOpenTelemetry()
+    .ConfigureResource(r => r.AddService(ServiceName))
+    .WithTracing(tracing => tracing
+        .AddAspNetCoreInstrumentation()
+        .AddHttpClientInstrumentation()
+        .AddEntityFrameworkCoreInstrumentation()
+        .AddOtlpExporter(o => o.Endpoint = new Uri(builder.Configuration["Otlp:Endpoint"] ?? "http://jaeger:4317")))
+    .WithMetrics(metrics => metrics
+        .AddAspNetCoreInstrumentation()
+        .AddHttpClientInstrumentation()
+        .AddPrometheusExporter());
+
+builder.Services.AddHealthChecks();
 
 // Add services to the container.
 builder.Services.AddControllers();
@@ -45,6 +76,8 @@ app.UseHttpsRedirection();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHealthChecks("/health");
+app.MapPrometheusScrapingEndpoint(); // GET /metrics
 
 // Global Exception Handler Middleware
 // Note: In .NET 8, you would typically use IExceptionHandler, but an inline middleware works perfectly too.
