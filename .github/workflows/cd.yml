@@ -25,27 +25,35 @@ jobs:
         run: docker compose up -d
 
       - name: Wait for every service to report healthy
-        shell: bash
+        # PowerShell, not bash: this is a Windows self-hosted runner, and `shell: bash` isn't
+        # reliably resolvable there - it depends on whatever happens to be first on PATH
+        # (Git Bash, WSL's bash.exe shim, etc), which varies by machine setup.
+        shell: pwsh
         run: |
-          set -e
-          services="apigateway requestservice employeeservice departmentservice leavebalanceservice notificationservice absenceservice"
-          for s in $services; do
-            echo "Waiting on $s..."
-            for i in $(seq 1 30); do
-              status=$(docker inspect --format='{{.State.Health.Status}}' "backend-${s}-1" 2>/dev/null || echo "starting")
-              if [ "$status" = "healthy" ]; then
-                echo "$s is healthy"
+          $ErrorActionPreference = "Stop"
+          $services = "apigateway","requestservice","employeeservice","departmentservice","leavebalanceservice","notificationservice","absenceservice"
+          foreach ($s in $services) {
+            Write-Host "Waiting on $s..."
+            $healthy = $false
+            for ($i = 1; $i -le 30; $i++) {
+              $status = docker inspect --format='{{.State.Health.Status}}' "backend-$s-1" 2>$null
+              if (-not $status) { $status = "starting" }
+              if ($status -eq "healthy") {
+                Write-Host "$s is healthy"
+                $healthy = $true
                 break
-              fi
-              if [ "$i" = "30" ]; then
-                echo "::error::$s did not become healthy within 150s"
-                docker compose logs "$s" --tail 50
+              }
+              if ($i -eq 30) {
+                Write-Host "::error::$s did not become healthy within 150s"
+                docker compose logs $s --tail 50
                 exit 1
-              fi
-              sleep 5
-            done
-          done
+              }
+              Start-Sleep -Seconds 5
+            }
+          }
 
       - name: Post-deploy check
-        shell: bash
-        run: curl -f http://localhost:8080/health
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          Invoke-WebRequest -Uri http://localhost:8080/health -UseBasicParsing | Out-Null
