@@ -27,8 +27,9 @@ jobs:
       - name: Wait for every service to report healthy
         # PowerShell, not bash: this is a Windows self-hosted runner, and `shell: bash` isn't
         # reliably resolvable there - it depends on whatever happens to be first on PATH
-        # (Git Bash, WSL's bash.exe shim, etc), which varies by machine setup.
-        shell: pwsh
+        # (Git Bash, WSL's bash.exe shim, etc), which varies by machine setup. Windows
+        # PowerShell (powershell.exe), not PowerShell Core (pwsh) - pwsh isn't installed here.
+        shell: powershell
         run: |
           $ErrorActionPreference = "Stop"
           $services = "apigateway","requestservice","employeeservice","departmentservice","leavebalanceservice","notificationservice","absenceservice"
@@ -53,7 +54,7 @@ jobs:
           }
 
       - name: Post-deploy check
-        shell: pwsh
+        shell: powershell
         run: |
           $ErrorActionPreference = "Stop"
           Invoke-WebRequest -Uri http://localhost:8080/health -UseBasicParsing | Out-Null
